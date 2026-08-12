@@ -45,6 +45,12 @@
               </span>
               <span class="option-label">Ulubione</span>
             </button>
+            <button id="folderMenuBtn" class="menu-option" type="button">
+              <span class="option-icon icon-folder">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+              </span>
+              <span class="option-label">Foldery</span>
+            </button>
           </div>
           <div class="menu-secondary">
             <button id="exportBtn" type="button">Eksportuj notatki</button>
@@ -92,6 +98,52 @@
         <button id="saveBtn">Zapisz</button>
       </div>
     </section>
+
+    <!-- LISTA FOLDERÓW -->
+    <section id="foldersScreen" class="screen">
+      <header class="topbar">
+        <button id="foldersBackBtn" class="icon-btn" aria-label="Wróć">←</button>
+        <h1 class="screen-title">Foldery</h1>
+      </header>
+      <div id="foldersPane" class="list-pane"></div>
+      <button id="newFolderBtn" class="fab" aria-label="Nowy folder">+</button>
+    </section>
+
+    <!-- SZCZEGÓŁY FOLDERU -->
+    <section id="folderDetailScreen" class="screen">
+      <header class="topbar">
+        <button id="folderBackBtn" class="icon-btn" aria-label="Wróć">←</button>
+        <h1 id="folderDetailTitle" class="screen-title">Folder</h1>
+        <button id="folderAddNoteBtn" class="circle-btn" title="Dodaj nową notatkę do folderu" aria-label="Dodaj nową notatkę do folderu">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <button id="folderSearchAddBtn" class="circle-btn" title="Dodaj istniejące notatki" aria-label="Dodaj istniejące notatki">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+      </header>
+      <div id="folderNotesPane" class="list-pane"></div>
+    </section>
+
+    <!-- WYBÓR NOTATEK DO DODANIA -->
+    <section id="folderPickerScreen" class="screen">
+      <header class="topbar">
+        <button id="pickerCloseBtn" class="icon-btn" aria-label="Zamknij">✕</button>
+        <input id="pickerSearch" class="picker-search" placeholder="Szukaj notatek..." />
+        <button id="pickerAddBtn" class="pill-add-btn" type="button">Dodaj</button>
+      </header>
+      <div id="pickerNotesPane" class="list-pane"></div>
+    </section>
+
+    <!-- MODAL: NOWY FOLDER -->
+    <div id="folderModalBackdrop" class="backdrop hidden"></div>
+    <div id="folderModal" class="folder-modal">
+      <h3>Nowy folder</h3>
+      <input id="folderNameInput" class="modal-input" placeholder="Nazwa folderu" />
+      <div class="modal-actions">
+        <button id="folderCancelBtn" class="btn-secondary" type="button">Anuluj</button>
+        <button id="folderCreateBtn" type="button">Utwórz</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="app.js"></script>
