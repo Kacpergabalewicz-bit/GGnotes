@@ -1,6 +1,6 @@
-const CACHE = 'ggnotes-cache-v1';
+const CACHE = 'ggnotes-cache-v2';
 const ASSETS = [
-  '/', '/index.html', '/styles.css', '/app.js', '/manifest.json'
+  '/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'
 ];
 
 self.addEventListener('install', evt=>{

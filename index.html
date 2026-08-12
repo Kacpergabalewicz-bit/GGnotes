@@ -2,34 +2,66 @@
 <html lang="pl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>GG Notes</title>
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0b5cff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GG Notes" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <h1>GG Notes</h1>
-    <div class="controls">
-      <input id="search" placeholder="Szukaj notatek..." />
-      <button id="newBtn">Nowa notatka</button>
-      <button id="exportBtn">Eksportuj</button>
-      <input id="importFile" type="file" accept="application/json" hidden />
-      <button id="importBtn">Importuj</button>
-    </div>
-  </header>
-  <main>
-    <aside id="listPane"></aside>
-    <section id="editorPane">
-      <input id="noteTitle" placeholder="Tytuł" />
-      <textarea id="noteBody" placeholder="Twoja notatka..."></textarea>
-      <div class="editor-actions">
-        <button id="saveBtn">Zapisz</button>
-        <button id="deleteBtn">Usuń</button>
+  <div id="app">
+    <!-- LISTA NOTATEK -->
+    <section id="listScreen" class="screen">
+      <header class="topbar">
+        <h1>GG Notes</h1>
+        <div class="topbar-actions">
+          <button id="themeBtn" class="icon-btn" title="Motyw" aria-label="Przełącz motyw">🌙</button>
+          <button id="menuBtn" class="icon-btn" title="Menu" aria-label="Menu">⋮</button>
+        </div>
+      </header>
+      <div class="searchbar">
+        <input id="search" placeholder="Szukaj notatek..." />
+      </div>
+      <div id="listPane"></div>
+      <button id="newBtn" class="fab" aria-label="Nowa notatka">+</button>
+
+      <div id="sheetBackdrop" class="backdrop hidden"></div>
+      <div id="menuSheet" class="sheet hidden">
+        <button id="exportBtn">⬆️ Eksportuj notatki</button>
+        <button id="importBtn">⬇️ Importuj notatki</button>
+        <input id="importFile" type="file" accept="application/json" hidden />
+        <button id="menuCloseBtn">Zamknij</button>
       </div>
     </section>
-  </main>
+
+    <!-- EDYTOR NOTATKI -->
+    <section id="editorScreen" class="screen">
+      <header class="topbar">
+        <button id="backBtn" class="icon-btn" aria-label="Wróć">←</button>
+        <input id="noteTitle" placeholder="Tytuł" />
+        <button id="pinBtn" class="icon-btn" title="Przypnij" aria-label="Przypnij">☆</button>
+      </header>
+      <textarea id="noteBody" placeholder="Twoja notatka..."></textarea>
+
+      <div id="audioPlayerWrap" class="audio-wrap hidden">
+        <audio id="audioPlayer" controls></audio>
+        <button id="deleteAudioBtn" class="icon-btn" aria-label="Usuń nagranie">🗑</button>
+      </div>
+
+      <div class="editor-actions">
+        <button id="recordBtn" class="icon-btn record-btn" aria-label="Nagraj notatkę głosową">🎤</button>
+        <span id="recordStatus" class="record-status"></span>
+        <div class="spacer"></div>
+        <button id="deleteBtn" class="danger">Usuń</button>
+        <button id="saveBtn">Zapisz</button>
+      </div>
+    </section>
+  </div>
+
   <script type="module" src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
