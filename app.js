@@ -39,8 +39,9 @@ async function getAllNotes(){
 }
 
 async function saveNote(note){
-  note.updatedAt = Date.now();
   if(!note.id) note.id = 'n_'+Date.now();
+  if(!note.createdAt) note.createdAt = Date.now();
+  note.updatedAt = Date.now();
   await withStore('readwrite', store=>store.put(note));
   return note;
 }
@@ -51,8 +52,8 @@ async function deleteNote(id){
 
 async function exportNotes(){
   const notes = await getAllNotes();
-  // Nagrania głosowe (Blob) nie są eksportowane do JSON - eksport obejmuje tekst, tytuł i status przypięcia.
-  const plain = notes.map(({id,title,body,pinned,updatedAt})=>({id,title,body,pinned,updatedAt}));
+  // Nagrania głosowe (Blob) nie są eksportowane do JSON - eksport obejmuje tekst, tytuł, datę i status przypięcia.
+  const plain = notes.map(({id,title,body,pinned,createdAt,updatedAt})=>({id,title,body,pinned,createdAt,updatedAt}));
   const blob = new Blob([JSON.stringify(plain, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -92,9 +93,12 @@ const backBtn = document.getElementById('backBtn');
 const pinBtn = document.getElementById('pinBtn');
 const themeBtn = document.getElementById('themeBtn');
 const menuBtn = document.getElementById('menuBtn');
-const menuSheet = document.getElementById('menuSheet');
+const menuDropdown = document.getElementById('menuDropdown');
 const sheetBackdrop = document.getElementById('sheetBackdrop');
-const menuCloseBtn = document.getElementById('menuCloseBtn');
+const searchBar = document.getElementById('searchBar');
+const searchMenuBtn = document.getElementById('searchMenuBtn');
+const voiceMenuBtn = document.getElementById('voiceMenuBtn');
+const closeSearchBtn = document.getElementById('closeSearchBtn');
 const recordBtn = document.getElementById('recordBtn');
 const recordStatus = document.getElementById('recordStatus');
 const audioPlayerWrap = document.getElementById('audioPlayerWrap');
@@ -127,7 +131,7 @@ function renderList(filter=''){
     const t = document.createElement('div'); t.className='note-title'; t.textContent = n.title||'(brak tytułu)';
     const b = document.createElement('div'); b.className='note-body'; b.textContent = (n.body||'').slice(0,120);
     const meta = document.createElement('div'); meta.className='note-meta';
-    meta.textContent = formatWhen(n.updatedAt);
+    meta.textContent = formatWhen(n.createdAt || n.updatedAt);
     if(n.audio){ const mic = document.createElement('span'); mic.textContent = ' 🎤'; meta.appendChild(mic); }
     main.appendChild(t); main.appendChild(b); main.appendChild(meta);
 
@@ -273,9 +277,32 @@ function initTheme(){
   applyTheme(saved);
 }
 
-// --- Menu (eksport/import) ---
-function openMenu(){ menuSheet.classList.remove('hidden'); sheetBackdrop.classList.remove('hidden'); }
-function closeMenu(){ menuSheet.classList.add('hidden'); sheetBackdrop.classList.add('hidden'); }
+// --- Menu (dropdown z animacją) ---
+function openMenu(){
+  sheetBackdrop.classList.remove('hidden');
+  requestAnimationFrame(()=> menuDropdown.classList.add('open'));
+}
+function closeMenu(){
+  menuDropdown.classList.remove('open');
+  setTimeout(()=> sheetBackdrop.classList.add('hidden'), 260);
+}
+
+function openSearch(){
+  closeMenu();
+  searchBar.classList.add('visible');
+  setTimeout(()=> searchEl.focus(), 260);
+}
+function closeSearch(){
+  searchBar.classList.remove('visible');
+  searchEl.value = '';
+  renderList('');
+}
+
+async function quickVoiceNote(){
+  closeMenu();
+  await newNote();
+  setTimeout(()=> startRecording(), 380);
+}
 
 async function init(){
   initTheme();
@@ -296,12 +323,14 @@ backBtn.addEventListener('click', showListScreen);
 pinBtn.addEventListener('click', ()=>{ if(currentNote) togglePinForNote(currentNote); });
 themeBtn.addEventListener('click', ()=> applyTheme(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark'));
 menuBtn.addEventListener('click', openMenu);
-menuCloseBtn.addEventListener('click', closeMenu);
 sheetBackdrop.addEventListener('click', closeMenu);
 exportBtn.addEventListener('click', ()=>{ exportNotes(); closeMenu(); });
 importBtn.addEventListener('click', ()=>{ importFile.click(); });
 importFile.addEventListener('change', async (e)=>{ if(e.target.files[0]) await importNotes(e.target.files[0]); notes = await getAllNotes(); renderList(); closeMenu(); });
 recordBtn.addEventListener('click', toggleRecording);
 deleteAudioBtn.addEventListener('click', deleteAudio);
+searchMenuBtn.addEventListener('click', openSearch);
+voiceMenuBtn.addEventListener('click', quickVoiceNote);
+closeSearchBtn.addEventListener('click', closeSearch);
 
 window.addEventListener('load', ()=>init());

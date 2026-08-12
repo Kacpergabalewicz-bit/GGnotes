@@ -20,22 +20,43 @@
         <h1>GG Notes</h1>
         <div class="topbar-actions">
           <button id="themeBtn" class="icon-btn" title="Motyw" aria-label="Przełącz motyw">🌙</button>
-          <button id="menuBtn" class="icon-btn" title="Menu" aria-label="Menu">⋮</button>
+          <button id="menuBtn" class="dots-btn" title="Menu" aria-label="Menu" aria-haspopup="true">
+            <span></span><span></span><span></span>
+          </button>
+        </div>
+
+        <div id="menuDropdown" class="dropdown" role="menu">
+          <div class="menu-options">
+            <button id="searchMenuBtn" class="menu-option" type="button">
+              <span class="option-icon icon-search">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              </span>
+              <span class="option-label">Wyszukaj</span>
+            </button>
+            <button id="voiceMenuBtn" class="menu-option" type="button">
+              <span class="option-icon icon-mic">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+              </span>
+              <span class="option-label">Nagraj notatkę</span>
+            </button>
+          </div>
+          <div class="menu-secondary">
+            <button id="exportBtn" type="button">Eksportuj notatki</button>
+            <button id="importBtn" type="button">Importuj notatki</button>
+            <input id="importFile" type="file" accept="application/json" hidden />
+          </div>
         </div>
       </header>
-      <div class="searchbar">
+
+      <div class="searchbar" id="searchBar">
         <input id="search" placeholder="Szukaj notatek..." />
+        <button id="closeSearchBtn" class="icon-btn" aria-label="Zamknij wyszukiwanie">✕</button>
       </div>
+
       <div id="listPane"></div>
       <button id="newBtn" class="fab" aria-label="Nowa notatka">+</button>
 
       <div id="sheetBackdrop" class="backdrop hidden"></div>
-      <div id="menuSheet" class="sheet hidden">
-        <button id="exportBtn">⬆️ Eksportuj notatki</button>
-        <button id="importBtn">⬇️ Importuj notatki</button>
-        <input id="importFile" type="file" accept="application/json" hidden />
-        <button id="menuCloseBtn">Zamknij</button>
-      </div>
     </section>
 
     <!-- EDYTOR NOTATKI -->

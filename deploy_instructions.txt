@@ -15,4 +15,4 @@ git push -u origin main
 
 4) Po kilku minutach Twoja strona będzie dostępna pod https://TWOJ_USER.github.io/GGnotes/
 
-Uwaga: Jeśli nie chcesz używać Actions, możesz w Settings → Pages ustawić branch "gh-pages" jako źródło i użyć innego narzędzia do publikacji.
+Uwaga: Jeśli nie chcesz używać Actions, możesz w Settings → Pages ustawić branch "gh-pages" jako źródło i użyć innego narzędzia do publikacji. 
