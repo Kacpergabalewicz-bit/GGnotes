@@ -94,14 +94,12 @@
         <button id="lockBtn" class="icon-btn" title="Zablokuj PIN-em" aria-label="Zablokuj notatkę">🔓</button>
         <button id="pinBtn" class="icon-btn" title="Przypnij" aria-label="Przypnij">☆</button>
       </header>
-      <textarea id="noteBody" placeholder="Twoja notatka..."></textarea>
+      <div id="noteBody" class="note-body-editable" contenteditable="true" data-placeholder="Twoja notatka..."></div>
 
       <div id="audioPlayerWrap" class="audio-wrap hidden">
         <audio id="audioPlayer" controls></audio>
         <button id="deleteAudioBtn" class="icon-btn" aria-label="Usuń nagranie">🗑</button>
       </div>
-
-      <div id="photosStrip" class="photos-strip hidden"></div>
 
       <div class="editor-actions">
         <button id="recordBtn" class="icon-btn record-btn" aria-label="Nagraj notatkę głosową">🎤</button>

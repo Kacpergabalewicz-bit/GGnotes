@@ -92,7 +92,8 @@ async function deleteFolder(id){
 async function buildExportPayload(){
   const notes = await getAllNotes();
   const allFolders = await getAllFolders();
-  // Nagrania głosowe i zdjęcia (Blob) nie są eksportowane do JSON - eksport obejmuje tekst, tytuł, datę, foldery, przypięcie i blokadę.
+  // Zdjęcia i rysunki są teraz częścią treści notatki (inline <img> w polu body),
+  // więc eksport zachowuje je w pełni. Jedynie nagrania głosowe (Blob) nie są eksportowane do JSON.
   const plainNotes = notes.map(({id,title,body,pinned,createdAt,updatedAt,folderIds,locked})=>({id,title,body,pinned,createdAt,updatedAt,folderIds,locked}));
   const plainFolders = allFolders.map(({id,name,createdAt})=>({id,name,createdAt}));
   return { notes: plainNotes, folders: plainFolders, exportedAt: Date.now() };
@@ -126,6 +127,17 @@ function formatWhen(ts){
   return sameDay
     ? d.toLocaleTimeString('pl-PL', {hour:'2-digit', minute:'2-digit'})
     : d.toLocaleDateString('pl-PL', {day:'2-digit', month:'2-digit'});
+}
+
+let stripHtmlScratch = null;
+function stripHtml(html){
+  if(!html) return '';
+  if(!stripHtmlScratch) stripHtmlScratch = document.createElement('div');
+  stripHtmlScratch.innerHTML = html;
+  return stripHtmlScratch.textContent || '';
+}
+function hasInlineImage(html){
+  return !!html && /<img[\s>]/i.test(html);
 }
 
 // UI - elementy
@@ -202,7 +214,6 @@ const pinSubmitBtn = document.getElementById('pinSubmitBtn');
 // Zdjęcia
 const photoBtn = document.getElementById('photoBtn');
 const photoFile = document.getElementById('photoFile');
-const photosStrip = document.getElementById('photosStrip');
 const photoViewer = document.getElementById('photoViewer');
 const photoViewerImg = document.getElementById('photoViewerImg');
 const photoViewerCloseBtn = document.getElementById('photoViewerCloseBtn');
@@ -235,14 +246,12 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
 let showingFavorites = false;
-let photoObjectUrls = [];
 let pinResolve = null;
 let pinMode = 'verify';
 let drawCtx = null;
 let drawColor = '#1c1c1e';
 let drawSize = 3;
 let drawUndoStack = [];
-let drawTargetNote = null;
 let drawIsNewNote = false;
 let isDrawingStroke = false;
 let autoBackupTimer = null;
@@ -269,11 +278,11 @@ function buildNoteItemEl(n, onOpen){
   const main = document.createElement('div'); main.className = 'note-main';
   const t = document.createElement('div'); t.className='note-title'; t.textContent = n.title||'(brak tytułu)';
   const b = document.createElement('div'); b.className='note-body';
-  b.textContent = n.locked ? '🔒 Notatka zablokowana' : (n.body||'').slice(0,120);
+  b.textContent = n.locked ? '🔒 Notatka zablokowana' : stripHtml(n.body).slice(0,120);
   const meta = document.createElement('div'); meta.className='note-meta';
   meta.textContent = formatWhen(n.createdAt || n.updatedAt);
   if(n.audio){ const mic = document.createElement('span'); mic.textContent = ' 🎤'; meta.appendChild(mic); }
-  if(n.photos && n.photos.length){ const ph = document.createElement('span'); ph.textContent = ' 📷'; meta.appendChild(ph); }
+  if(hasInlineImage(n.body)){ const ph = document.createElement('span'); ph.textContent = ' 📷'; meta.appendChild(ph); }
   if(n.locked){ const lk = document.createElement('span'); lk.className='note-lock-badge'; lk.textContent = ' 🔒'; meta.appendChild(lk); }
   main.appendChild(t); main.appendChild(b); main.appendChild(meta);
 
@@ -293,7 +302,7 @@ function renderList(filter=''){
   }
   let any = false;
   for(const n of source){
-    if(f && !( (n.title||'').toLowerCase().includes(f) || (n.body||'').toLowerCase().includes(f) )) continue;
+    if(f && !( (n.title||'').toLowerCase().includes(f) || stripHtml(n.body).toLowerCase().includes(f) )) continue;
     any = true;
     listPane.appendChild(buildNoteItemEl(n, ()=> openNote(n.id)));
   }
@@ -410,7 +419,7 @@ function renderPickerList(filter=''){
   const f = filter.toLowerCase();
   let any = false;
   for(const n of notes){
-    if(f && !( (n.title||'').toLowerCase().includes(f) || (n.body||'').toLowerCase().includes(f) )) continue;
+    if(f && !( (n.title||'').toLowerCase().includes(f) || stripHtml(n.body).toLowerCase().includes(f) )) continue;
     any = true;
     const already = (n.folderIds||[]).includes(currentFolder.id);
     const selected = pickerSelected.has(n.id);
@@ -422,7 +431,7 @@ function renderPickerList(filter=''){
 
     const main = document.createElement('div'); main.className = 'note-main';
     const t = document.createElement('div'); t.className='note-title'; t.textContent = n.title||'(brak tytułu)';
-    const b = document.createElement('div'); b.className='note-body'; b.textContent = (n.body||'').slice(0,120);
+    const b = document.createElement('div'); b.className='note-body'; b.textContent = stripHtml(n.body).slice(0,120);
     main.appendChild(t); main.appendChild(b);
 
     el.appendChild(check); el.appendChild(main);
@@ -473,17 +482,50 @@ async function commitPickerAdd(){
 }
 
 function bindAutosave(){
-  [titleEl, bodyEl].forEach(el=>el.addEventListener('input', ()=>{
+  titleEl.addEventListener('input', ()=>{
     if(!currentNote) return;
-    currentNote.title = titleEl.value; currentNote.body = bodyEl.value;
+    currentNote.title = titleEl.value;
     if(saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(()=>doSaveActive(), 700);
-  }));
+    saveTimeout = setTimeout(()=>doSaveActive(), 400);
+  });
+  bodyEl.addEventListener('input', ()=>{
+    if(!currentNote) return;
+    if(bodyEl.innerHTML === '<br>') bodyEl.innerHTML = '';
+    currentNote.body = bodyEl.innerHTML;
+    if(saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(()=>doSaveActive(), 400);
+  });
+  bodyEl.addEventListener('paste', (e)=>{
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    insertPlainTextAtSelection(text);
+    currentNote && (currentNote.body = bodyEl.innerHTML);
+    if(saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(()=>doSaveActive(), 400);
+  });
+  bodyEl.addEventListener('click', (e)=>{
+    const img = e.target.closest('img.note-inline-img');
+    if(img) openPhotoViewer(img.src);
+  });
+}
+
+function insertPlainTextAtSelection(text){
+  const sel = window.getSelection();
+  if(!sel || sel.rangeCount===0 || !bodyEl.contains(sel.anchorNode)){
+    bodyEl.appendChild(document.createTextNode(text));
+    return;
+  }
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const node = document.createTextNode(text);
+  range.insertNode(node);
+  range.setStartAfter(node); range.setEndAfter(node);
+  sel.removeAllRanges(); sel.addRange(range);
 }
 
 async function doSaveActive(){
   if(!currentNote) return;
-  currentNote.title = titleEl.value; currentNote.body = bodyEl.value;
+  currentNote.title = titleEl.value; currentNote.body = bodyEl.innerHTML;
   await saveNote(currentNote);
   await refreshViews();
 }
@@ -518,8 +560,11 @@ async function openNote(id){
     if(!ok) return;
   }
   currentNote = n;
-  titleEl.value = n.title||''; bodyEl.value = n.body||'';
-  updatePinBtn(); updateLockBtn(); updateAudioUI(); renderPhotosStrip(); recordStatus.textContent = '';
+  titleEl.value = n.title||'';
+  bodyEl.innerHTML = n.body||'';
+  savedRange = null;
+  await migrateLegacyPhotos(n);
+  updatePinBtn(); updateLockBtn(); updateAudioUI(); recordStatus.textContent = '';
   renderList(searchEl.value);
   showEditorScreen();
 }
@@ -528,8 +573,9 @@ async function newNote(folderId){
   const n = { title:'', body:'', pinned:false, audio:null, audioMime:null, photos:[], locked:false, folderIds: folderId ? [folderId] : [], id: 'n_'+Date.now() };
   await saveNote(n);
   await refreshViews();
-  currentNote = n; titleEl.value=''; bodyEl.value='';
-  updatePinBtn(); updateLockBtn(); updateAudioUI(); renderPhotosStrip(); recordStatus.textContent='';
+  currentNote = n; titleEl.value=''; bodyEl.innerHTML='';
+  savedRange = null;
+  updatePinBtn(); updateLockBtn(); updateAudioUI(); recordStatus.textContent='';
   showEditorScreen();
   setTimeout(()=>titleEl.focus(), 300);
 }
@@ -776,7 +822,7 @@ async function toggleLockForCurrentNote(){
   }
 }
 
-// --- Zdjęcia w notatkach ---
+// --- Zdjęcia w notatkach: wstawiane bezpośrednio w treść (inline <img>) ---
 function resizeImageFile(file, maxDim=1600, quality=0.82){
   return new Promise((resolve, reject)=>{
     const img = new Image();
@@ -790,11 +836,84 @@ function resizeImageFile(file, maxDim=1600, quality=0.82){
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      canvas.toBlob(blob=>{ URL.revokeObjectURL(url); resolve(blob); }, 'image/jpeg', quality);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', quality));
     };
     img.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
     img.src = url;
   });
+}
+
+// Zapamiętuje pozycję kursora w treści notatki, zanim otworzymy okno wyboru
+// zdjęcia lub ekran rysowania (te akcje odbierają focus edytorowi).
+let savedRange = null;
+function saveCursorRange(){
+  const sel = window.getSelection();
+  if(sel && sel.rangeCount>0 && bodyEl.contains(sel.anchorNode)){
+    savedRange = sel.getRangeAt(0).cloneRange();
+  } else {
+    savedRange = null;
+  }
+}
+
+function insertImageAtCursor(dataUrl){
+  const img = document.createElement('img');
+  img.className = 'note-inline-img';
+  img.src = dataUrl;
+  img.alt = 'Zdjęcie';
+
+  const sel = window.getSelection();
+  let range = savedRange;
+  if(range && bodyEl.contains(range.startContainer)){
+    sel.removeAllRanges(); sel.addRange(range);
+  } else {
+    range = document.createRange();
+    range.selectNodeContents(bodyEl);
+    range.collapse(false);
+  }
+  range.deleteContents();
+  range.insertNode(img);
+  const br = document.createElement('br');
+  img.after(br);
+  range.setStartAfter(br); range.setEndAfter(br);
+  sel.removeAllRanges(); sel.addRange(range);
+  savedRange = range.cloneRange();
+}
+
+async function commitBodyChangeNow(){
+  if(!currentNote) return;
+  if(saveTimeout){ clearTimeout(saveTimeout); saveTimeout = null; }
+  currentNote.title = titleEl.value; currentNote.body = bodyEl.innerHTML;
+  await saveNote(currentNote);
+  await refreshViews();
+}
+
+async function blobToDataUrl(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Migracja starych notatek: dawniej zdjęcia/rysunki trafiały do osobnej tablicy
+// note.photos (Blob). Przy otwarciu takiej notatki dołączamy je jako inline <img>
+// bezpośrednio do treści i czyścimy starą tablicę.
+async function migrateLegacyPhotos(note){
+  if(!note.photos || note.photos.length===0) return;
+  for(const p of note.photos){
+    try{
+      const dataUrl = await blobToDataUrl(p.blob);
+      const img = document.createElement('img');
+      img.className = 'note-inline-img'; img.src = dataUrl; img.alt = 'Zdjęcie';
+      bodyEl.appendChild(img);
+      bodyEl.appendChild(document.createElement('br'));
+    }catch(e){ /* pomiń uszkodzone zdjęcie */ }
+  }
+  note.photos = [];
+  note.body = bodyEl.innerHTML;
+  await saveNote(note);
 }
 
 async function handlePhotoFiles(fileList){
@@ -802,39 +921,12 @@ async function handlePhotoFiles(fileList){
   const files = Array.from(fileList||[]);
   for(const file of files){
     try{
-      const blob = await resizeImageFile(file);
-      currentNote.photos = currentNote.photos || [];
-      currentNote.photos.push({ id:'p_'+Date.now()+Math.random(), blob, mime:'image/jpeg' });
+      const dataUrl = await resizeImageFile(file);
+      insertImageAtCursor(dataUrl);
     }catch(e){ /* pomiń błędny plik */ }
   }
-  await doSaveActive();
-  renderPhotosStrip();
-}
-
-function renderPhotosStrip(){
-  photoObjectUrls.forEach(u=>URL.revokeObjectURL(u));
-  photoObjectUrls = [];
-  photosStrip.innerHTML = '';
-  const photos = currentNote?.photos || [];
-  if(photos.length===0){ photosStrip.classList.add('hidden'); return; }
-  photosStrip.classList.remove('hidden');
-  for(const p of photos){
-    const url = URL.createObjectURL(p.blob);
-    photoObjectUrls.push(url);
-    const thumb = document.createElement('div'); thumb.className = 'photo-thumb';
-    const img = document.createElement('img'); img.src = url; img.alt = 'Zdjęcie';
-    img.onclick = ()=> openPhotoViewer(url);
-    const rm = document.createElement('button'); rm.className='photo-remove'; rm.type='button'; rm.textContent='✕';
-    rm.setAttribute('aria-label','Usuń zdjęcie');
-    rm.onclick = async (ev)=>{
-      ev.stopPropagation();
-      currentNote.photos = currentNote.photos.filter(x=>x.id!==p.id);
-      await doSaveActive();
-      renderPhotosStrip();
-    };
-    thumb.appendChild(img); thumb.appendChild(rm);
-    photosStrip.appendChild(thumb);
-  }
+  await commitBodyChangeNow();
+  showToast(files.length>1 ? 'Dodano zdjęcia' : 'Dodano zdjęcie');
 }
 
 function openPhotoViewer(url){
@@ -910,8 +1002,8 @@ function initDrawCanvasEvents(){
   window.addEventListener('resize', ()=>{ if(drawScreen.classList.contains('show')) resizeDrawCanvas(); });
 }
 
-function openDrawScreen(target, isNew){
-  drawTargetNote = target; drawIsNewNote = !!isNew;
+function openDrawScreen(isNew){
+  drawIsNewNote = !!isNew;
   drawUndoStack = [];
   drawScreen.classList.add('show');
   requestAnimationFrame(()=>{
@@ -921,40 +1013,27 @@ function openDrawScreen(target, isNew){
 }
 function closeDrawScreen(){
   drawScreen.classList.remove('show');
-  drawTargetNote = null;
 }
 
 async function quickDrawNote(){
   closeMenu();
-  const n = { title:'', body:'', pinned:false, audio:null, audioMime:null, photos:[], locked:false, folderIds:[], id:'n_'+Date.now() };
-  await saveNote(n);
-  await refreshViews();
-  openDrawScreen(n, true);
+  await newNote();
+  openDrawScreen(true);
 }
 
 function attachDrawFromEditor(){
   if(!currentNote) return;
-  openDrawScreen(currentNote, false);
+  saveCursorRange();
+  openDrawScreen(false);
 }
 
 async function saveDrawing(){
-  const blob = await new Promise(res=> drawCanvas.toBlob(res, 'image/png'));
-  if(!blob){ closeDrawScreen(); return; }
-  const target = drawTargetNote;
-  target.photos = target.photos || [];
-  target.photos.push({ id:'p_'+Date.now()+Math.random(), blob, mime:'image/png' });
-  await saveNote(target);
-  await refreshViews();
+  const dataUrl = drawCanvas.toDataURL('image/png');
+  if(!currentNote){ closeDrawScreen(); return; }
+  insertImageAtCursor(dataUrl);
+  await commitBodyChangeNow();
   closeDrawScreen();
-  if(drawIsNewNote){
-    currentNote = target;
-    titleEl.value = target.title||''; bodyEl.value = target.body||'';
-    updatePinBtn(); updateLockBtn(); updateAudioUI(); renderPhotosStrip(); recordStatus.textContent='';
-    showEditorScreen();
-  } else if(currentNote && currentNote.id===target.id){
-    renderPhotosStrip();
-  }
-  showToast('Rysunek zapisany');
+  showToast('Rysunek dodany do notatki');
 }
 
 // --- Przeciąganie notatek do folderu (drag & drop, mysz + dotyk) ---
@@ -1188,7 +1267,7 @@ pinBiometricBtn.addEventListener('click', handlePinBiometric);
 pinRegisterBioBtn.addEventListener('click', handlePinRegisterBio);
 
 // Zdjęcia
-photoBtn.addEventListener('click', ()=> photoFile.click());
+photoBtn.addEventListener('click', ()=>{ saveCursorRange(); photoFile.click(); });
 photoFile.addEventListener('change', async (e)=>{ await handlePhotoFiles(e.target.files); photoFile.value=''; });
 photoViewerCloseBtn.addEventListener('click', closePhotoViewer);
 photoViewer.addEventListener('click', (e)=>{ if(e.target===photoViewer) closePhotoViewer(); });

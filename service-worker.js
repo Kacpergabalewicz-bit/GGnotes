@@ -1,4 +1,4 @@
-const CACHE = 'ggnotes-cache-v7';
+const CACHE = 'ggnotes-cache-v8';
 const ASSETS = [
   '/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'
 ];
@@ -18,24 +18,27 @@ self.addEventListener('activate', evt=>{
   })());
 });
 
-// Strategia "network-first": zawsze próbujemy pobrać najnowszą wersję z sieci.
-// Jeśli sieć zawiedzie (offline), korzystamy z lokalnego cache jako zapasu.
-// Dzięki temu aktualizacje aplikacji są widoczne natychmiast, a offline nadal działa.
+// Strategia "stale-while-revalidate": odpowiadamy NATYCHMIAST z lokalnego cache
+// (brak opóźnienia przy każdym przejściu/ładowaniu), a w tle pobieramy najnowszą
+// wersję z sieci i aktualizujemy cache na potrzeby kolejnego odświeżenia.
+// Jeśli w cache nic nie ma (pierwsze uruchomienie), czekamy na sieć.
 self.addEventListener('fetch', evt=>{
   const req = evt.request;
   if(req.method !== 'GET') return;
   if(!req.url.startsWith(self.location.origin)) return;
 
-  evt.respondWith(
-    fetch(req).then(resp=>{
+  evt.respondWith((async ()=>{
+    const cached = await caches.match(req, { cacheName: CACHE });
+    const networkFetch = fetch(req).then(resp=>{
       if(resp && resp.status===200){
-        const copy = resp.clone();
-        caches.open(CACHE).then(c=>c.put(req, copy));
+        caches.open(CACHE).then(c=>c.put(req, resp.clone()));
       }
       return resp;
-    }).catch(async ()=>{
-      const cached = await caches.match(req, { cacheName: CACHE });
-      return cached || caches.match('/index.html', { cacheName: CACHE });
-    })
-  );
+    }).catch(()=>null);
+
+    if(cached) return cached;
+
+    const fresh = await networkFetch;
+    return fresh || caches.match('/index.html', { cacheName: CACHE });
+  })());
 });
