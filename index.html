@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GG Notes</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0b5cff" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>GG Notes</h1>
+    <div class="controls">
+      <input id="search" placeholder="Szukaj notatek..." />
+      <button id="newBtn">Nowa notatka</button>
+      <button id="exportBtn">Eksportuj</button>
+      <input id="importFile" type="file" accept="application/json" hidden />
+      <button id="importBtn">Importuj</button>
+    </div>
+  </header>
+  <main>
+    <aside id="listPane"></aside>
+    <section id="editorPane">
+      <input id="noteTitle" placeholder="Tytuł" />
+      <textarea id="noteBody" placeholder="Twoja notatka..."></textarea>
+      <div class="editor-actions">
+        <button id="saveBtn">Zapisz</button>
+        <button id="deleteBtn">Usuń</button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js');
+    }
+  </script>
+</body>
+</html>

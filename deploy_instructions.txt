@@ -1,0 +1,18 @@
+Kroki do wypchnięcia repo na GitHub i uruchomienia Pages
+
+1) Stwórz nowe repo na GitHub (np. GGnotes) — bez README (może być puste).
+
+2) W lokalnym folderze projektu uruchom (Windows PowerShell lub Git Bash):
+
+git init
+git add .
+git commit -m "Initial GG Notes PWA"
+git branch -M main
+git remote add origin https://github.com/TWOJ_USER/GGnotes.git
+git push -u origin main
+
+3) Po wgraniu: w repo GitHub przejdź do Settings → Pages, upewnij się że źródłem jest "GitHub Actions" lub "Deploy from GitHub Actions" (workflow w .github/workflows/deploy.yml automatycznie wypchnie zawartość jako stronę).
+
+4) Po kilku minutach Twoja strona będzie dostępna pod https://TWOJ_USER.github.io/GGnotes/
+
+Uwaga: Jeśli nie chcesz używać Actions, możesz w Settings → Pages ustawić branch "gh-pages" jako źródło i użyć innego narzędzia do publikacji.
