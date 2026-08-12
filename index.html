@@ -57,6 +57,18 @@
               </span>
               <span class="option-label">Rysuj</span>
             </button>
+            <button id="trashMenuBtn" class="menu-option" type="button">
+              <span class="option-icon icon-trash">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+              </span>
+              <span class="option-label">Kosz</span>
+            </button>
+            <button id="selectMenuBtn" class="menu-option" type="button">
+              <span class="option-icon icon-select">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6 11 11 4"></polyline><line x1="14" y1="6" x2="21" y2="6"></line><polyline points="3 16 6 19 11 12"></polyline><line x1="14" y1="18" x2="21" y2="18"></line></svg>
+              </span>
+              <span class="option-label">Zaznacz</span>
+            </button>
           </div>
           <div class="menu-secondary">
             <button id="exportBtn" type="button">Eksportuj notatki</button>
@@ -64,6 +76,7 @@
             <input id="importFile" type="file" accept="application/json" hidden />
             <button id="shareAppBtn" type="button">Udostępnij aplikację</button>
             <button id="pinSettingsBtn" type="button">Ustaw PIN / Face ID</button>
+            <button id="sortBtn" type="button">Sortuj: Najnowsze</button>
             <span id="backupInfo" class="backup-info"></span>
           </div>
         </div>
@@ -77,6 +90,10 @@
       <div class="searchbar" id="searchBar">
         <input id="search" placeholder="Szukaj notatek..." />
         <button id="closeSearchBtn" class="icon-btn" aria-label="Zamknij wyszukiwanie">✕</button>
+      </div>
+
+      <div class="searchbar tag-filter-bar" id="tagFilterBar">
+        <div id="tagFilterChips" class="tag-filter-chips"></div>
       </div>
 
       <div id="listPane"></div>
@@ -94,6 +111,36 @@
         <button id="lockBtn" class="icon-btn" title="Zablokuj PIN-em" aria-label="Zablokuj notatkę">🔓</button>
         <button id="pinBtn" class="icon-btn" title="Przypnij" aria-label="Przypnij">☆</button>
       </header>
+
+      <div class="editor-toolbar">
+        <div id="noteColorRow" class="note-color-row">
+          <button class="note-color-swatch none active" type="button" data-color="" aria-label="Brak koloru"></button>
+          <button class="note-color-swatch" type="button" data-color="#ff453a" style="background:#ff453a" aria-label="Czerwony"></button>
+          <button class="note-color-swatch" type="button" data-color="#ff9f0a" style="background:#ff9f0a" aria-label="Pomarańczowy"></button>
+          <button class="note-color-swatch" type="button" data-color="#ffd60a" style="background:#ffd60a" aria-label="Żółty"></button>
+          <button class="note-color-swatch" type="button" data-color="#32d74b" style="background:#32d74b" aria-label="Zielony"></button>
+          <button class="note-color-swatch" type="button" data-color="#0a84ff" style="background:#0a84ff" aria-label="Niebieski"></button>
+          <button class="note-color-swatch" type="button" data-color="#bf5af2" style="background:#bf5af2" aria-label="Fioletowy"></button>
+        </div>
+        <button id="checklistToggleBtn" class="icon-btn" title="Lista zadań" aria-label="Przełącz listę zadań">☑️</button>
+      </div>
+
+      <div class="tags-row" id="noteTagsRow">
+        <div id="noteTagChips" class="tag-chips"></div>
+        <button id="addTagBtn" class="tag-add-btn" type="button">+ Tag</button>
+        <input id="tagInput" class="tag-input hidden" placeholder="Nowy tag" />
+      </div>
+
+      <div id="checklistWrap" class="checklist-wrap hidden">
+        <div id="checklistItems" class="checklist-items"></div>
+        <div class="checklist-add-row">
+          <input id="checklistNewInput" class="checklist-new-input" placeholder="Nowe zadanie..." />
+          <button id="checklistAddBtn" class="circle-btn" type="button" aria-label="Dodaj zadanie">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+        </div>
+      </div>
+
       <div id="noteBody" class="note-body-editable" contenteditable="true" data-placeholder="Twoja notatka..."></div>
 
       <div id="audioPlayerWrap" class="audio-wrap hidden">
@@ -179,6 +226,16 @@
       </div>
     </section>
 
+    <!-- KOSZ -->
+    <section id="trashScreen" class="screen">
+      <header class="topbar">
+        <button id="trashBackBtn" class="icon-btn" aria-label="Wróć">←</button>
+        <h1 class="screen-title">Kosz</h1>
+        <button id="emptyTrashBtn" class="icon-btn" title="Opróżnij kosz" aria-label="Opróżnij kosz">🗑</button>
+      </header>
+      <div id="trashPane" class="list-pane"></div>
+    </section>
+
     <!-- MODAL: NOWY FOLDER -->
     <div id="folderModalBackdrop" class="backdrop hidden"></div>
     <div id="folderModal" class="folder-modal">
@@ -218,6 +275,26 @@
     <div id="dropFoldersBar" class="drop-folders-bar hidden">
       <div class="drop-folders-label">Upuść na folder, aby dodać</div>
       <div id="dropFoldersChips" class="drop-folders-chips"></div>
+    </div>
+
+    <!-- PASEK ZAZNACZANIA WIELU NOTATEK -->
+    <div id="selectionBar" class="selection-bar hidden">
+      <div id="selectionCount" class="selection-count">Wybrano: 0</div>
+      <div class="selection-actions">
+        <button id="selectionMoveBtn" class="btn-secondary" type="button">Przenieś</button>
+        <button id="selectionDeleteBtn" class="danger-btn" type="button">Usuń</button>
+        <button id="selectionCancelBtn" class="btn-secondary" type="button">Anuluj</button>
+      </div>
+    </div>
+
+    <!-- WYBÓR FOLDERU PRZY PRZENOSZENIU WIELU NOTATEK -->
+    <div id="bulkFolderBackdrop" class="backdrop hidden"></div>
+    <div id="bulkFolderSheet" class="folder-modal bulk-folder-sheet">
+      <h3>Przenieś do folderu</h3>
+      <div id="bulkFolderList" class="bulk-folder-list"></div>
+      <div class="modal-actions">
+        <button id="bulkFolderCancelBtn" class="btn-secondary" type="button">Anuluj</button>
+      </div>
     </div>
 
     <!-- TOAST -->

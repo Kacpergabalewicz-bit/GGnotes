@@ -1,4 +1,4 @@
-const CACHE = 'ggnotes-cache-v8';
+const CACHE = 'ggnotes-cache-v9';
 const ASSETS = [
   '/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'
 ];

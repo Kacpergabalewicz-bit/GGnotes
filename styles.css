@@ -89,6 +89,7 @@ body{
   box-shadow:0 16px 40px rgba(0,0,0,.3); border:1px solid var(--border);
   transform-origin:top right; transform:translateY(-16px) scale(.9); opacity:0;
   pointer-events:none; transition:transform .32s cubic-bezier(.2,.9,.25,1.35), opacity .22s ease;
+  max-height:calc(100vh - 96px); overflow-y:auto; -webkit-overflow-scrolling:touch;
 }
 .dropdown.open{ transform:translateY(0) scale(1); opacity:1; pointer-events:auto; }
 
@@ -171,14 +172,15 @@ button.danger{ background:transparent; color:var(--danger); }
 
 .screen-title{ flex:1; font-size:1.05rem; margin:0; font-weight:600; }
 
-#foldersScreen, #folderDetailScreen, #folderPickerScreen, #drawScreen{
+#foldersScreen, #folderDetailScreen, #folderPickerScreen, #drawScreen, #trashScreen{
   transform:translateX(100%); pointer-events:none;
 }
 #foldersScreen{ z-index:15; }
 #folderDetailScreen{ z-index:16; }
 #folderPickerScreen{ z-index:17; }
 #drawScreen{ z-index:20; }
-#foldersScreen.show, #folderDetailScreen.show, #folderPickerScreen.show, #drawScreen.show{
+#trashScreen{ z-index:18; }
+#foldersScreen.show, #folderDetailScreen.show, #folderPickerScreen.show, #drawScreen.show, #trashScreen.show{
   transform:translateX(0); pointer-events:auto;
 }
 
@@ -241,10 +243,10 @@ button.danger{ background:transparent; color:var(--danger); }
 .note-item.pickable.already{ opacity:.6; cursor:default; }
 
 @media(min-width:820px){
-  #foldersScreen, #folderDetailScreen, #folderPickerScreen, #drawScreen{
+  #foldersScreen, #folderDetailScreen, #folderPickerScreen, #drawScreen, #trashScreen{
     position:absolute !important; transform:translateX(100%) !important;
   }
-  #foldersScreen.show, #folderDetailScreen.show, #folderPickerScreen.show, #drawScreen.show{
+  #foldersScreen.show, #folderDetailScreen.show, #folderPickerScreen.show, #drawScreen.show, #trashScreen.show{
     transform:translateX(0) !important;
   }
 }
@@ -329,3 +331,86 @@ button.danger{ background:transparent; color:var(--danger); }
   max-width:86vw; text-align:center;
 }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* --- Filtr tagów na liście --- */
+.tag-filter-chips{ display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; width:100%; -webkit-overflow-scrolling:touch; }
+.tag-chip{
+  flex-shrink:0; padding:8px 14px; border-radius:999px; background:var(--card);
+  border:1px solid var(--border); font-size:.82rem; font-weight:600; color:var(--text); cursor:pointer;
+}
+.tag-chip.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+
+/* --- Tagi i kolor na kafelku notatki --- */
+.note-tags-preview{ display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
+.note-tag-pill{ font-size:.68rem; padding:2px 8px; border-radius:999px; background:rgba(11,92,255,.12); color:var(--accent); font-weight:600; }
+.note-item.has-color{ box-shadow:inset 4px 0 0 0 var(--note-accent); }
+
+/* --- Zaznaczanie wielu notatek (checkbox reuse .pick-check) --- */
+.pick-check.selected{ background:var(--accent); border-color:var(--accent); }
+
+/* --- Sortowanie / pasek zaznaczania --- */
+.selection-bar{
+  position:fixed; left:0; right:0; bottom:0; z-index:65; background:var(--card);
+  border-top:1px solid var(--border); padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+  box-shadow:0 -8px 24px rgba(0,0,0,.25); display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.selection-count{ font-size:.85rem; font-weight:600; color:var(--text); flex-shrink:0; }
+.selection-actions{ display:flex; gap:8px; }
+.danger-btn{ background:var(--danger); color:#fff; }
+
+/* --- Edytor: pasek narzędzi (kolor notatki / lista zadań) --- */
+.editor-toolbar{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border); overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.note-color-row{ display:flex; gap:6px; flex-shrink:0; }
+.note-color-swatch{
+  width:26px; height:26px; border-radius:50%; padding:0; border:2px solid var(--border);
+  cursor:pointer; flex-shrink:0; background:transparent;
+}
+.note-color-swatch.active{ border-color:var(--text); transform:scale(1.15); }
+.note-color-swatch.none{
+  background:linear-gradient(135deg, transparent 45%, var(--muted) 45%, var(--muted) 55%, transparent 55%);
+}
+
+/* --- Edytor: etykiety (tagi) --- */
+.tags-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border); }
+.tag-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+.tag-chip-editable{
+  display:flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px;
+  background:rgba(11,92,255,.12); color:var(--accent); font-size:.78rem; font-weight:600;
+}
+.tag-chip-editable button{ background:none; border:none; color:var(--accent); padding:0; font-size:.85rem; cursor:pointer; line-height:1; }
+.tag-add-btn{ padding:6px 12px; font-size:.78rem; background:var(--bg); color:var(--text); border:1px dashed var(--border); border-radius:999px; }
+.tag-input{ padding:6px 12px; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text); font-size:.82rem; width:130px; }
+
+/* --- Edytor: lista zadań (checklista) --- */
+.checklist-wrap{ padding:8px 16px 0; flex-shrink:0; max-height:38vh; overflow-y:auto; -webkit-overflow-scrolling:touch; border-bottom:1px solid var(--border); }
+.checklist-item{ display:flex; align-items:center; gap:10px; padding:8px 0; }
+.checklist-item + .checklist-item{ border-top:1px solid var(--border); }
+.checklist-check{
+  width:24px; height:24px; border-radius:50%; border:2px solid var(--border); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; color:#fff; font-size:.8rem; background:transparent; cursor:pointer; padding:0;
+}
+.checklist-check.checked{ background:var(--accent); border-color:var(--accent); }
+.checklist-text{ flex:1; border:none; background:transparent; color:var(--text); font-size:.95rem; padding:4px 0; min-width:0; }
+.checklist-text:focus{ outline:none; }
+.checklist-text.checked{ text-decoration:line-through; color:var(--muted); }
+.checklist-remove{ background:transparent; color:var(--muted); font-size:1rem; padding:4px; border-radius:50%; flex-shrink:0; }
+.checklist-add-row{ display:flex; align-items:center; gap:8px; padding:10px 0 14px; }
+.checklist-new-input{ flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text); font-size:.92rem; min-width:0; }
+
+/* --- Kosz --- */
+.trash-item{
+  display:flex; align-items:flex-start; gap:10px; padding:14px; border-radius:20px;
+  margin-bottom:10px; background:var(--card); border:1px solid var(--border);
+}
+.trash-actions{ display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
+.trash-actions button{ padding:7px 12px; font-size:.75rem; }
+
+/* --- Wybór folderu przy przenoszeniu wielu notatek --- */
+.bulk-folder-sheet{ width:300px; }
+.bulk-folder-list{ max-height:40vh; overflow-y:auto; margin-bottom:14px; -webkit-overflow-scrolling:touch; }
+.bulk-folder-row{ display:flex; align-items:center; gap:10px; padding:12px; border-radius:14px; cursor:pointer; }
+.bulk-folder-row:active{ background:rgba(11,92,255,.08); }

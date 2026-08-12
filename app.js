@@ -48,6 +48,9 @@ async function saveNote(note){
   if(!note.folderIds) note.folderIds = [];
   if(!note.photos) note.photos = [];
   if(typeof note.locked !== 'boolean') note.locked = false;
+  if(!note.tags) note.tags = [];
+  if(typeof note.color === 'undefined') note.color = null;
+  if(!note.checklist) note.checklist = [];
   note.updatedAt = Date.now();
   await withStore(DB_STORE, 'readwrite', store=>store.put(note));
   scheduleAutoBackup();
@@ -94,7 +97,7 @@ async function buildExportPayload(){
   const allFolders = await getAllFolders();
   // Zdjęcia i rysunki są teraz częścią treści notatki (inline <img> w polu body),
   // więc eksport zachowuje je w pełni. Jedynie nagrania głosowe (Blob) nie są eksportowane do JSON.
-  const plainNotes = notes.map(({id,title,body,pinned,createdAt,updatedAt,folderIds,locked})=>({id,title,body,pinned,createdAt,updatedAt,folderIds,locked}));
+  const plainNotes = notes.map(({id,title,body,pinned,createdAt,updatedAt,folderIds,locked,tags,color,checklist,deletedAt})=>({id,title,body,pinned,createdAt,updatedAt,folderIds,locked,tags,color,checklist,deletedAt}));
   const plainFolders = allFolders.map(({id,name,createdAt})=>({id,name,createdAt}));
   return { notes: plainNotes, folders: plainFolders, exportedAt: Date.now() };
 }
@@ -138,6 +141,15 @@ function stripHtml(html){
 }
 function hasInlineImage(html){
   return !!html && /<img[\s>]/i.test(html);
+}
+
+function activeNotes(list){
+  return (list || notes).filter(n=>!n.deletedAt);
+}
+function getAllTags(){
+  const set = new Set();
+  for(const n of activeNotes()){ (n.tags||[]).forEach(t=>set.add(t)); }
+  return Array.from(set).sort((a,b)=>a.localeCompare(b,'pl'));
 }
 
 // UI - elementy
@@ -191,6 +203,37 @@ const pickerCloseBtn = document.getElementById('pickerCloseBtn');
 const pickerSearch = document.getElementById('pickerSearch');
 const pickerAddBtn = document.getElementById('pickerAddBtn');
 const pickerNotesPane = document.getElementById('pickerNotesPane');
+
+// Kosz / zaznaczanie wielu / sortowanie / filtr tagów
+const trashMenuBtn = document.getElementById('trashMenuBtn');
+const selectMenuBtn = document.getElementById('selectMenuBtn');
+const sortBtn = document.getElementById('sortBtn');
+const tagFilterBar = document.getElementById('tagFilterBar');
+const tagFilterChips = document.getElementById('tagFilterChips');
+const trashScreen = document.getElementById('trashScreen');
+const trashBackBtn = document.getElementById('trashBackBtn');
+const emptyTrashBtn = document.getElementById('emptyTrashBtn');
+const trashPane = document.getElementById('trashPane');
+const selectionBar = document.getElementById('selectionBar');
+const selectionCount = document.getElementById('selectionCount');
+const selectionMoveBtn = document.getElementById('selectionMoveBtn');
+const selectionDeleteBtn = document.getElementById('selectionDeleteBtn');
+const selectionCancelBtn = document.getElementById('selectionCancelBtn');
+const bulkFolderBackdrop = document.getElementById('bulkFolderBackdrop');
+const bulkFolderSheet = document.getElementById('bulkFolderSheet');
+const bulkFolderList = document.getElementById('bulkFolderList');
+const bulkFolderCancelBtn = document.getElementById('bulkFolderCancelBtn');
+
+// Edytor: kolor notatki / tagi / lista zadań
+const noteColorRow = document.getElementById('noteColorRow');
+const checklistToggleBtn = document.getElementById('checklistToggleBtn');
+const noteTagChips = document.getElementById('noteTagChips');
+const addTagBtn = document.getElementById('addTagBtn');
+const tagInput = document.getElementById('tagInput');
+const checklistWrap = document.getElementById('checklistWrap');
+const checklistItems = document.getElementById('checklistItems');
+const checklistNewInput = document.getElementById('checklistNewInput');
+const checklistAddBtn = document.getElementById('checklistAddBtn');
 
 // Udostępnianie / PIN / kopia zapasowa
 const shareBtn = document.getElementById('shareBtn');
@@ -256,6 +299,12 @@ let drawIsNewNote = false;
 let isDrawingStroke = false;
 let autoBackupTimer = null;
 let dragState = null;
+let sortMode = localStorage.getItem('gg-sort-mode') || 'new';
+let activeTagFilter = null;
+let selectionMode = false;
+let selectedNoteIds = new Set();
+let checklistVisible = false;
+let checklistSaveTimeout = null;
 
 function buildEmptyHint(text){
   const d = document.createElement('div'); d.className = 'empty-hint'; d.textContent = text;
@@ -266,14 +315,16 @@ function buildNoteItemEl(n, onOpen){
   const el = document.createElement('div'); el.className = 'note-item';
   if(currentNote && n.id===currentNote.id) el.classList.add('active');
   if(n.locked) el.classList.add('locked');
+  if(n.color){ el.classList.add('has-color'); el.style.setProperty('--note-accent', n.color); }
 
-  const handle = document.createElement('div'); handle.className = 'drag-handle'; handle.textContent = '⠿';
-
-  const star = document.createElement('button');
-  star.className = 'pin-star'; star.type = 'button';
-  star.textContent = n.pinned ? '★' : '☆';
-  star.setAttribute('aria-label', n.pinned ? 'Odepnij notatkę' : 'Przypnij notatkę');
-  star.onclick = (ev)=>{ ev.stopPropagation(); togglePinForNote(n); };
+  let leading;
+  if(selectionMode){
+    leading = document.createElement('div');
+    leading.className = 'pick-check' + (selectedNoteIds.has(n.id) ? ' selected' : '');
+    leading.textContent = selectedNoteIds.has(n.id) ? '✓' : '';
+  } else {
+    leading = document.createElement('div'); leading.className = 'drag-handle'; leading.textContent = '⠿';
+  }
 
   const main = document.createElement('div'); main.className = 'note-main';
   const t = document.createElement('div'); t.className='note-title'; t.textContent = n.title||'(brak tytułu)';
@@ -283,34 +334,77 @@ function buildNoteItemEl(n, onOpen){
   meta.textContent = formatWhen(n.createdAt || n.updatedAt);
   if(n.audio){ const mic = document.createElement('span'); mic.textContent = ' 🎤'; meta.appendChild(mic); }
   if(hasInlineImage(n.body)){ const ph = document.createElement('span'); ph.textContent = ' 📷'; meta.appendChild(ph); }
+  if(n.checklist && n.checklist.length){
+    const done = n.checklist.filter(i=>i.checked).length;
+    const cl = document.createElement('span'); cl.textContent = ` ☑️ ${done}/${n.checklist.length}`; meta.appendChild(cl);
+  }
   if(n.locked){ const lk = document.createElement('span'); lk.className='note-lock-badge'; lk.textContent = ' 🔒'; meta.appendChild(lk); }
   main.appendChild(t); main.appendChild(b); main.appendChild(meta);
 
-  el.appendChild(handle); el.appendChild(star); el.appendChild(main);
-  el.onclick = ()=> onOpen(n);
-  attachDragHandlers(el, n);
+  if(n.tags && n.tags.length){
+    const tagsRow = document.createElement('div'); tagsRow.className = 'note-tags-preview';
+    for(const tag of n.tags.slice(0,3)){
+      const pill = document.createElement('span'); pill.className='note-tag-pill'; pill.textContent = tag;
+      tagsRow.appendChild(pill);
+    }
+    main.appendChild(tagsRow);
+  }
+
+  el.appendChild(leading);
+  if(!selectionMode){
+    const star = document.createElement('button');
+    star.className = 'pin-star'; star.type = 'button';
+    star.textContent = n.pinned ? '★' : '☆';
+    star.setAttribute('aria-label', n.pinned ? 'Odepnij notatkę' : 'Przypnij notatkę');
+    star.onclick = (ev)=>{ ev.stopPropagation(); togglePinForNote(n); };
+    el.appendChild(star);
+  }
+  el.appendChild(main);
+
+  if(selectionMode){
+    el.onclick = ()=> toggleNoteSelection(n.id);
+  } else {
+    el.onclick = ()=> onOpen(n);
+    attachDragHandlers(el, n);
+  }
   return el;
+}
+
+function sortNotesForDisplay(list){
+  const pinned = list.filter(n=>n.pinned);
+  const rest = list.filter(n=>!n.pinned);
+  const cmp = sortMode==='title'
+    ? (a,b)=> (a.title||'').localeCompare(b.title||'', 'pl')
+    : sortMode==='old'
+      ? (a,b)=> (a.updatedAt||0)-(b.updatedAt||0)
+      : (a,b)=> (b.updatedAt||0)-(a.updatedAt||0);
+  pinned.sort(cmp); rest.sort(cmp);
+  return pinned.concat(rest);
 }
 
 function renderList(filter=''){
   listPane.innerHTML = '';
   const f = filter.toLowerCase();
-  const source = showingFavorites ? notes.filter(n=>n.pinned) : notes;
-  if(showingFavorites && source.length===0){
-    listPane.appendChild(buildEmptyHint('Brak ulubionych notatek. Stuknij ☆ przy notatce, aby dodać ją tutaj.'));
-    return;
-  }
+  let source = activeNotes();
+  if(showingFavorites) source = source.filter(n=>n.pinned);
+  if(activeTagFilter) source = source.filter(n=> (n.tags||[]).includes(activeTagFilter));
+  source = sortNotesForDisplay(source);
   let any = false;
   for(const n of source){
     if(f && !( (n.title||'').toLowerCase().includes(f) || stripHtml(n.body).toLowerCase().includes(f) )) continue;
     any = true;
     listPane.appendChild(buildNoteItemEl(n, ()=> openNote(n.id)));
   }
-  if(!any && f){ listPane.appendChild(buildEmptyHint('Brak wyników wyszukiwania.')); }
+  if(!any){
+    if(f) listPane.appendChild(buildEmptyHint('Brak wyników wyszukiwania.'));
+    else if(showingFavorites) listPane.appendChild(buildEmptyHint('Brak ulubionych notatek. Stuknij ☆ przy notatce, aby dodać ją tutaj.'));
+    else if(activeTagFilter) listPane.appendChild(buildEmptyHint('Brak notatek z tagiem „'+activeTagFilter+'”.'));
+  }
 }
 
 async function refreshViews(){
   notes = await getAllNotes();
+  renderTagFilterBar();
   renderList(searchEl.value);
   if(currentFolder){
     const updated = folders.find(fo=>fo.id===currentFolder.id) || currentFolder;
@@ -327,7 +421,7 @@ function renderFoldersList(){
     return;
   }
   for(const folder of folders){
-    const count = notes.filter(n=>(n.folderIds||[]).includes(folder.id)).length;
+    const count = activeNotes().filter(n=>(n.folderIds||[]).includes(folder.id)).length;
     const el = document.createElement('div'); el.className = 'folder-item';
 
     const icon = document.createElement('div'); icon.className = 'folder-icon';
@@ -359,7 +453,7 @@ function renderFolderDetail(folder){
   currentFolder = folder;
   folderDetailTitle.textContent = folder.name;
   folderNotesPane.innerHTML = '';
-  const items = notes.filter(n=> (n.folderIds||[]).includes(folder.id));
+  const items = activeNotes().filter(n=> (n.folderIds||[]).includes(folder.id));
   if(items.length===0){
     folderNotesPane.appendChild(buildEmptyHint('Ten folder jest pusty. Dodaj nową notatkę lub dodaj istniejące przyciskami powyżej.'));
     return;
@@ -418,7 +512,7 @@ function renderPickerList(filter=''){
   pickerNotesPane.innerHTML = '';
   const f = filter.toLowerCase();
   let any = false;
-  for(const n of notes){
+  for(const n of activeNotes()){
     if(f && !( (n.title||'').toLowerCase().includes(f) || stripHtml(n.body).toLowerCase().includes(f) )) continue;
     any = true;
     const already = (n.folderIds||[]).includes(currentFolder.id);
@@ -479,6 +573,295 @@ async function commitPickerAdd(){
   closeFolderPicker();
   renderFolderDetail(currentFolder);
   renderFoldersList();
+}
+
+// --- Filtr tagów na liście notatek ---
+function renderTagFilterBar(){
+  const tags = getAllTags();
+  if(tags.length===0){
+    tagFilterBar.classList.remove('visible');
+    activeTagFilter = null;
+    return;
+  }
+  tagFilterBar.classList.add('visible');
+  tagFilterChips.innerHTML = '';
+  for(const tag of tags){
+    const chip = document.createElement('button'); chip.type='button';
+    chip.className = 'tag-chip' + (activeTagFilter===tag ? ' active' : '');
+    chip.textContent = tag;
+    chip.onclick = ()=>{
+      activeTagFilter = (activeTagFilter===tag) ? null : tag;
+      renderTagFilterBar();
+      renderList(searchEl.value);
+    };
+    tagFilterChips.appendChild(chip);
+  }
+}
+
+// --- Sortowanie listy notatek ---
+const SORT_LABELS = { new:'Najnowsze', old:'Najstarsze', title:'Tytuł A-Z' };
+function updateSortBtnLabel(){
+  sortBtn.textContent = 'Sortuj: ' + SORT_LABELS[sortMode];
+}
+function cycleSortMode(){
+  const order = ['new','old','title'];
+  const idx = order.indexOf(sortMode);
+  sortMode = order[(idx+1)%order.length];
+  localStorage.setItem('gg-sort-mode', sortMode);
+  updateSortBtnLabel();
+  renderList(searchEl.value);
+  showToast('Sortowanie: ' + SORT_LABELS[sortMode]);
+}
+
+// --- Zaznaczanie wielu notatek naraz ---
+function updateSelectionBar(){
+  selectionCount.textContent = 'Wybrano: ' + selectedNoteIds.size;
+}
+function enterSelectionMode(){
+  closeMenu();
+  selectionMode = true;
+  selectedNoteIds.clear();
+  selectionBar.classList.remove('hidden');
+  updateSelectionBar();
+  renderList(searchEl.value);
+}
+function exitSelectionMode(){
+  selectionMode = false;
+  selectedNoteIds.clear();
+  selectionBar.classList.add('hidden');
+  renderList(searchEl.value);
+}
+function toggleNoteSelection(id){
+  if(selectedNoteIds.has(id)) selectedNoteIds.delete(id); else selectedNoteIds.add(id);
+  updateSelectionBar();
+  renderList(searchEl.value);
+}
+async function bulkDeleteSelected(){
+  if(selectedNoteIds.size===0){ showToast('Zaznacz przynajmniej jedną notatkę'); return; }
+  if(!confirm(`Przenieść ${selectedNoteIds.size} notatek do kosza?`)) return;
+  for(const id of selectedNoteIds){
+    const n = notes.find(x=>x.id===id);
+    if(n){ n.deletedAt = Date.now(); await saveNote(n); }
+  }
+  exitSelectionMode();
+  await refreshViews(); await refreshFolders();
+  showToast('Przeniesiono do kosza');
+}
+function renderBulkFolderList(){
+  bulkFolderList.innerHTML = '';
+  if(folders.length===0){
+    bulkFolderList.appendChild(buildEmptyHint('Brak folderów. Utwórz jeden w sekcji Foldery.'));
+    return;
+  }
+  for(const f of folders){
+    const row = document.createElement('div'); row.className='bulk-folder-row';
+    const icon = document.createElement('span'); icon.textContent = '📁';
+    const label = document.createElement('span'); label.textContent = f.name;
+    row.appendChild(icon); row.appendChild(label);
+    row.onclick = async ()=>{
+      for(const id of selectedNoteIds){
+        const n = notes.find(x=>x.id===id);
+        if(!n) continue;
+        n.folderIds = n.folderIds || [];
+        if(!n.folderIds.includes(f.id)) n.folderIds.push(f.id);
+        await saveNote(n);
+      }
+      closeBulkFolderSheet();
+      exitSelectionMode();
+      await refreshViews(); await refreshFolders();
+      showToast(`Przeniesiono do folderu „${f.name}”`);
+    };
+    bulkFolderList.appendChild(row);
+  }
+}
+function openBulkFolderSheet(){
+  if(selectedNoteIds.size===0){ showToast('Zaznacz przynajmniej jedną notatkę'); return; }
+  renderBulkFolderList();
+  bulkFolderBackdrop.classList.remove('hidden');
+  requestAnimationFrame(()=> bulkFolderSheet.classList.add('open'));
+}
+function closeBulkFolderSheet(){
+  bulkFolderSheet.classList.remove('open');
+  setTimeout(()=> bulkFolderBackdrop.classList.add('hidden'), 220);
+}
+
+// --- Kosz (kosz na notatki, cofnij usunięcie) ---
+function buildTrashItemEl(n){
+  const el = document.createElement('div'); el.className = 'trash-item';
+  const main = document.createElement('div'); main.className = 'note-main';
+  const t = document.createElement('div'); t.className='note-title'; t.textContent = n.title||'(brak tytułu)';
+  const b = document.createElement('div'); b.className='note-body'; b.textContent = stripHtml(n.body).slice(0,100);
+  const meta = document.createElement('div'); meta.className='note-meta';
+  const daysLeft = Math.max(0, 30 - Math.floor((Date.now()-n.deletedAt)/86400000));
+  meta.textContent = `Usunięto: ${formatWhen(n.deletedAt)} · zniknie za ${daysLeft} dni`;
+  main.appendChild(t); main.appendChild(b); main.appendChild(meta);
+
+  const actions = document.createElement('div'); actions.className = 'trash-actions';
+  const restoreBtn = document.createElement('button'); restoreBtn.type='button'; restoreBtn.textContent='Przywróć';
+  restoreBtn.onclick = async ()=>{
+    n.deletedAt = null;
+    await saveNote(n);
+    await refreshViews(); await refreshFolders();
+    renderTrashList();
+    showToast('Przywrócono notatkę');
+  };
+  const delBtn = document.createElement('button'); delBtn.type='button'; delBtn.className='danger-btn'; delBtn.textContent='Usuń na zawsze';
+  delBtn.onclick = async ()=>{
+    if(!confirm('Usunąć trwale? Tej operacji nie można cofnąć.')) return;
+    await deleteNote(n.id);
+    notes = notes.filter(x=>x.id!==n.id);
+    renderTrashList();
+    showToast('Usunięto trwale');
+  };
+  actions.appendChild(restoreBtn); actions.appendChild(delBtn);
+
+  el.appendChild(main); el.appendChild(actions);
+  return el;
+}
+function renderTrashList(){
+  trashPane.innerHTML = '';
+  const items = notes.filter(n=>n.deletedAt).sort((a,b)=> b.deletedAt-a.deletedAt);
+  if(items.length===0){
+    trashPane.appendChild(buildEmptyHint('Kosz jest pusty.'));
+    return;
+  }
+  for(const n of items){ trashPane.appendChild(buildTrashItemEl(n)); }
+}
+function openTrash(){
+  closeMenu();
+  renderTrashList();
+  trashScreen.classList.add('show');
+}
+function closeTrash(){ trashScreen.classList.remove('show'); }
+async function emptyTrash(){
+  const items = notes.filter(n=>n.deletedAt);
+  if(items.length===0){ showToast('Kosz jest już pusty'); return; }
+  if(!confirm(`Trwale usunąć ${items.length} notatek z kosza?`)) return;
+  for(const n of items){ await deleteNote(n.id); }
+  notes = notes.filter(n=>!n.deletedAt);
+  renderTrashList();
+  showToast('Kosz opróżniony');
+}
+async function purgeOldTrash(){
+  const THIRTY_DAYS = 30*24*60*60*1000;
+  const stale = notes.filter(n=> n.deletedAt && (Date.now()-n.deletedAt > THIRTY_DAYS));
+  for(const n of stale){ await deleteNote(n.id); }
+  if(stale.length>0) notes = await getAllNotes();
+}
+
+// --- Edytor: kolor notatki ---
+function renderColorSwatches(){
+  const swatches = noteColorRow.querySelectorAll('.note-color-swatch');
+  const current = currentNote?.color || '';
+  swatches.forEach(sw=>{
+    sw.classList.toggle('active', (sw.dataset.color||'') === current);
+  });
+}
+async function setNoteColor(color){
+  if(!currentNote) return;
+  currentNote.color = color || null;
+  renderColorSwatches();
+  await doSaveActive();
+}
+
+// --- Edytor: etykiety (tagi) ---
+function renderNoteTagsEditor(){
+  noteTagChips.innerHTML = '';
+  const tags = (currentNote && currentNote.tags) || [];
+  for(const tag of tags){
+    const chip = document.createElement('span'); chip.className = 'tag-chip-editable';
+    const label = document.createElement('span'); label.textContent = tag;
+    const rm = document.createElement('button'); rm.type='button'; rm.textContent='✕'; rm.setAttribute('aria-label','Usuń tag');
+    rm.onclick = async ()=>{
+      currentNote.tags = currentNote.tags.filter(t=>t!==tag);
+      renderNoteTagsEditor();
+      await doSaveActive();
+      renderTagFilterBar();
+    };
+    chip.appendChild(label); chip.appendChild(rm);
+    noteTagChips.appendChild(chip);
+  }
+}
+function openTagInput(){
+  tagInput.classList.remove('hidden');
+  tagInput.value = '';
+  tagInput.focus();
+}
+function closeTagInput(){
+  tagInput.classList.add('hidden');
+}
+async function commitTagInput(){
+  if(tagInput.classList.contains('hidden')) return;
+  const val = tagInput.value.trim().toLowerCase();
+  closeTagInput();
+  if(!val || !currentNote) return;
+  currentNote.tags = currentNote.tags || [];
+  if(!currentNote.tags.includes(val)) currentNote.tags.push(val);
+  renderNoteTagsEditor();
+  await doSaveActive();
+  renderTagFilterBar();
+}
+
+// --- Edytor: lista zadań (checklista) ---
+function renderChecklist(){
+  checklistItems.innerHTML = '';
+  const items = (currentNote && currentNote.checklist) || [];
+  for(const item of items){
+    const row = document.createElement('div'); row.className = 'checklist-item';
+    const check = document.createElement('button'); check.type='button';
+    check.className = 'checklist-check' + (item.checked ? ' checked' : '');
+    check.textContent = item.checked ? '✓' : '';
+    check.setAttribute('aria-label', item.checked ? 'Odznacz zadanie' : 'Zaznacz zadanie');
+    check.onclick = ()=>{
+      item.checked = !item.checked;
+      saveChecklistDebounced();
+      renderChecklist();
+    };
+    const text = document.createElement('input');
+    text.className = 'checklist-text' + (item.checked ? ' checked' : '');
+    text.value = item.text || '';
+    text.addEventListener('input', ()=>{ item.text = text.value; saveChecklistDebounced(); });
+    const rm = document.createElement('button'); rm.type='button'; rm.className='checklist-remove'; rm.textContent='✕';
+    rm.setAttribute('aria-label','Usuń zadanie');
+    rm.onclick = ()=>{
+      currentNote.checklist = currentNote.checklist.filter(x=>x.id!==item.id);
+      saveChecklistDebounced();
+      renderChecklist();
+    };
+    row.appendChild(check); row.appendChild(text); row.appendChild(rm);
+    checklistItems.appendChild(row);
+  }
+}
+function saveChecklistDebounced(){
+  if(!currentNote) return;
+  if(checklistSaveTimeout) clearTimeout(checklistSaveTimeout);
+  checklistSaveTimeout = setTimeout(async ()=>{
+    await saveNote(currentNote);
+    await refreshViews();
+  }, 400);
+}
+function setChecklistVisible(visible){
+  checklistVisible = visible;
+  checklistWrap.classList.toggle('hidden', !visible);
+}
+function toggleChecklist(){
+  if(!currentNote) return;
+  if(checklistVisible){ setChecklistVisible(false); return; }
+  if(!currentNote.checklist) currentNote.checklist = [];
+  setChecklistVisible(true);
+  renderChecklist();
+  setTimeout(()=> checklistNewInput.focus(), 200);
+}
+function addChecklistItem(){
+  if(!currentNote) return;
+  const text = checklistNewInput.value.trim();
+  if(!text) return;
+  currentNote.checklist = currentNote.checklist || [];
+  currentNote.checklist.push({ id:'c_'+Date.now()+Math.random(), text, checked:false });
+  checklistNewInput.value = '';
+  saveChecklistDebounced();
+  renderChecklist();
+  checklistNewInput.focus();
 }
 
 function bindAutosave(){
@@ -565,17 +948,25 @@ async function openNote(id){
   savedRange = null;
   await migrateLegacyPhotos(n);
   updatePinBtn(); updateLockBtn(); updateAudioUI(); recordStatus.textContent = '';
+  renderColorSwatches();
+  renderNoteTagsEditor(); closeTagInput();
+  checklistVisible = !!(n.checklist && n.checklist.length>0);
+  setChecklistVisible(checklistVisible);
+  if(checklistVisible) renderChecklist();
   renderList(searchEl.value);
   showEditorScreen();
 }
 
 async function newNote(folderId){
-  const n = { title:'', body:'', pinned:false, audio:null, audioMime:null, photos:[], locked:false, folderIds: folderId ? [folderId] : [], id: 'n_'+Date.now() };
+  const n = { title:'', body:'', pinned:false, audio:null, audioMime:null, photos:[], locked:false, tags:[], color:null, checklist:[], folderIds: folderId ? [folderId] : [], id: 'n_'+Date.now() };
   await saveNote(n);
   await refreshViews();
   currentNote = n; titleEl.value=''; bodyEl.innerHTML='';
   savedRange = null;
   updatePinBtn(); updateLockBtn(); updateAudioUI(); recordStatus.textContent='';
+  renderColorSwatches();
+  renderNoteTagsEditor(); closeTagInput();
+  setChecklistVisible(false);
   showEditorScreen();
   setTimeout(()=>titleEl.focus(), 300);
 }
@@ -589,12 +980,13 @@ async function togglePinForNote(note){
 
 async function removeActive(){
   if(!currentNote) return;
-  if(!confirm('Na pewno usunąć notatkę?')) return;
-  const id = currentNote.id;
-  await deleteNote(id);
+  if(!confirm('Przenieść notatkę do kosza?')) return;
+  currentNote.deletedAt = Date.now();
+  await saveNote(currentNote);
   currentNote = null;
-  await refreshViews();
+  await refreshViews(); await refreshFolders();
   showListScreen();
+  showToast('Przeniesiono do kosza');
 }
 
 // --- Notatki głosowe ---
@@ -1211,10 +1603,13 @@ async function init(){
   await maybeRestoreAutoBackup();
   notes = await getAllNotes();
   folders = await getAllFolders();
-  if(notes.length===0){
-    await saveNote({id:'n_welcome', title:'Witaj w GG Notes', body:'To jest Twoja pierwsza notatka. Edytuj ją, dodaj nagranie głosowe 🎤, zdjęcie 📷 lub przypnij ⭐ ważne notatki.', pinned:true, audio:null, audioMime:null, photos:[], locked:false});
+  await purgeOldTrash();
+  if(activeNotes().length===0){
+    await saveNote({id:'n_welcome', title:'Witaj w GG Notes', body:'To jest Twoja pierwsza notatka. Edytuj ją, dodaj nagranie głosowe 🎤, zdjęcie 📷 lub przypnij ⭐ ważne notatki.', pinned:true, audio:null, audioMime:null, photos:[], locked:false, tags:[], color:null, checklist:[]});
     notes = await getAllNotes();
   }
+  updateSortBtnLabel();
+  renderTagFilterBar();
   renderList();
   updateBackupInfoText();
   bindAutosave();
@@ -1288,6 +1683,41 @@ drawSizes.addEventListener('click', (e)=>{
   const btn = e.target.closest('.draw-size'); if(!btn) return;
   drawSizes.querySelectorAll('.draw-size').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active'); drawSize = parseInt(btn.dataset.size, 10);
+});
+
+// Kosz
+trashMenuBtn.addEventListener('click', openTrash);
+trashBackBtn.addEventListener('click', closeTrash);
+emptyTrashBtn.addEventListener('click', emptyTrash);
+
+// Zaznaczanie wielu notatek
+selectMenuBtn.addEventListener('click', enterSelectionMode);
+selectionCancelBtn.addEventListener('click', exitSelectionMode);
+selectionDeleteBtn.addEventListener('click', bulkDeleteSelected);
+selectionMoveBtn.addEventListener('click', openBulkFolderSheet);
+bulkFolderCancelBtn.addEventListener('click', closeBulkFolderSheet);
+bulkFolderBackdrop.addEventListener('click', closeBulkFolderSheet);
+
+// Sortowanie
+sortBtn.addEventListener('click', cycleSortMode);
+
+// Edytor: lista zadań (checklista)
+checklistToggleBtn.addEventListener('click', toggleChecklist);
+checklistAddBtn.addEventListener('click', addChecklistItem);
+checklistNewInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addChecklistItem(); } });
+
+// Edytor: etykiety (tagi)
+addTagBtn.addEventListener('click', openTagInput);
+tagInput.addEventListener('keydown', (e)=>{
+  if(e.key==='Enter'){ e.preventDefault(); commitTagInput(); }
+  else if(e.key==='Escape'){ closeTagInput(); }
+});
+tagInput.addEventListener('blur', ()=>{ commitTagInput(); });
+
+// Edytor: kolor notatki
+noteColorRow.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.note-color-swatch'); if(!btn) return;
+  setNoteColor(btn.dataset.color || null);
 });
 
 window.addEventListener('load', ()=>init());
