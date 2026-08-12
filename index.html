@@ -39,6 +39,12 @@
               </span>
               <span class="option-label">Nagraj notatkę</span>
             </button>
+            <button id="favMenuBtn" class="menu-option" type="button">
+              <span class="option-icon icon-fav">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="#fff" stroke="#fff" stroke-width="1"><polygon points="12 2 15.09 8.63 22 9.27 16.5 14.14 18.18 21 12 17.27 5.82 21 7.5 14.14 2 9.27 8.91 8.63"></polygon></svg>
+              </span>
+              <span class="option-label">Ulubione</span>
+            </button>
           </div>
           <div class="menu-secondary">
             <button id="exportBtn" type="button">Eksportuj notatki</button>
@@ -47,6 +53,11 @@
           </div>
         </div>
       </header>
+
+      <div class="searchbar" id="favBar">
+        <span class="fav-bar-label">⭐ Ulubione notatki</span>
+        <button id="closeFavBtn" class="icon-btn" aria-label="Zamknij ulubione">✕</button>
+      </div>
 
       <div class="searchbar" id="searchBar">
         <input id="search" placeholder="Szukaj notatek..." />

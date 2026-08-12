@@ -98,6 +98,9 @@ const sheetBackdrop = document.getElementById('sheetBackdrop');
 const searchBar = document.getElementById('searchBar');
 const searchMenuBtn = document.getElementById('searchMenuBtn');
 const voiceMenuBtn = document.getElementById('voiceMenuBtn');
+const favMenuBtn = document.getElementById('favMenuBtn');
+const favBar = document.getElementById('favBar');
+const closeFavBtn = document.getElementById('closeFavBtn');
 const closeSearchBtn = document.getElementById('closeSearchBtn');
 const recordBtn = document.getElementById('recordBtn');
 const recordStatus = document.getElementById('recordStatus');
@@ -112,11 +115,21 @@ let lastAudioUrl = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
+let showingFavorites = false;
 
 function renderList(filter=''){
   listPane.innerHTML = '';
   const f = filter.toLowerCase();
-  for(const n of notes){
+  const source = showingFavorites ? notes.filter(n=>n.pinned) : notes;
+  if(showingFavorites && source.length===0){
+    const empty = document.createElement('div');
+    empty.className = 'note-body';
+    empty.style.textAlign = 'center'; empty.style.marginTop = '24px';
+    empty.textContent = 'Brak ulubionych notatek. Stuknij ☆ przy notatce, aby dodać ją tutaj.';
+    listPane.appendChild(empty);
+    return;
+  }
+  for(const n of source){
     if(f && !( (n.title||'').toLowerCase().includes(f) || (n.body||'').toLowerCase().includes(f) )) continue;
     const el = document.createElement('div'); el.className = 'note-item';
     if(currentNote && n.id===currentNote.id) el.classList.add('active');
@@ -289,6 +302,7 @@ function closeMenu(){
 
 function openSearch(){
   closeMenu();
+  closeFavorites();
   searchBar.classList.add('visible');
   setTimeout(()=> searchEl.focus(), 260);
 }
@@ -296,6 +310,19 @@ function closeSearch(){
   searchBar.classList.remove('visible');
   searchEl.value = '';
   renderList('');
+}
+
+function openFavorites(){
+  closeMenu();
+  closeSearch();
+  showingFavorites = true;
+  favBar.classList.add('visible');
+  renderList();
+}
+function closeFavorites(){
+  showingFavorites = false;
+  favBar.classList.remove('visible');
+  renderList(searchEl.value);
 }
 
 async function quickVoiceNote(){
@@ -331,6 +358,8 @@ recordBtn.addEventListener('click', toggleRecording);
 deleteAudioBtn.addEventListener('click', deleteAudio);
 searchMenuBtn.addEventListener('click', openSearch);
 voiceMenuBtn.addEventListener('click', quickVoiceNote);
+favMenuBtn.addEventListener('click', openFavorites);
+closeFavBtn.addEventListener('click', closeFavorites);
 closeSearchBtn.addEventListener('click', closeSearch);
 
 window.addEventListener('load', ()=>init());
