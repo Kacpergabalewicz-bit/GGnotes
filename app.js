@@ -1026,6 +1026,19 @@ async function doSaveActive(){
   await refreshViews();
 }
 
+// Natychmiastowy zapis wszystkich oczekujących zmian (tytuł/treść/checklista),
+// wywoływany przy chowaniu/zamykaniu karty, aby nic nie zginęło po wyjściu z apki.
+async function flushPendingSaves(){
+  if(!currentNote) return;
+  if(saveTimeout){ clearTimeout(saveTimeout); saveTimeout = null; }
+  if(checklistSaveTimeout){ clearTimeout(checklistSaveTimeout); checklistSaveTimeout = null; }
+  try{
+    currentNote.title = titleEl.value;
+    currentNote.body = bodyEl.innerHTML;
+    await saveNote(currentNote);
+  }catch(e){ /* ciche niepowodzenie - nie blokujemy zamykania apki */ }
+}
+
 function updatePinBtn(){
   pinBtn.textContent = currentNote?.pinned ? '★' : '☆';
   pinBtn.style.color = currentNote?.pinned ? '#e6a700' : '';
@@ -1841,5 +1854,12 @@ noteColorRow.addEventListener('click', (e)=>{
 reminderToggleBtn.addEventListener('click', toggleReminderRow);
 reminderSetBtn.addEventListener('click', commitReminder);
 reminderClearBtn.addEventListener('click', clearReminder);
+
+// Natychmiastowy zapis przy wyj\u015bciu / schowaniu apki (np. zamkni\u0119cie karty, prze\u0142\u0105czenie apki na telefonie)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'hidden') flushPendingSaves();
+});
+window.addEventListener('pagehide', ()=>{ flushPendingSaves(); });
+window.addEventListener('beforeunload', ()=>{ flushPendingSaves(); });
 
 window.addEventListener('load', ()=>init());
