@@ -51,6 +51,8 @@ async function saveNote(note){
   if(!note.tags) note.tags = [];
   if(typeof note.color === 'undefined') note.color = null;
   if(!note.checklist) note.checklist = [];
+  if(typeof note.reminderAt === 'undefined') note.reminderAt = null;
+  if(typeof note.reminderFired !== 'boolean') note.reminderFired = false;
   note.updatedAt = Date.now();
   await withStore(DB_STORE, 'readwrite', store=>store.put(note));
   scheduleAutoBackup();
@@ -97,7 +99,7 @@ async function buildExportPayload(){
   const allFolders = await getAllFolders();
   // Zdjęcia i rysunki są teraz częścią treści notatki (inline <img> w polu body),
   // więc eksport zachowuje je w pełni. Jedynie nagrania głosowe (Blob) nie są eksportowane do JSON.
-  const plainNotes = notes.map(({id,title,body,pinned,createdAt,updatedAt,folderIds,locked,tags,color,checklist,deletedAt})=>({id,title,body,pinned,createdAt,updatedAt,folderIds,locked,tags,color,checklist,deletedAt}));
+  const plainNotes = notes.map(({id,title,body,pinned,createdAt,updatedAt,folderIds,locked,tags,color,checklist,deletedAt,reminderAt,reminderFired})=>({id,title,body,pinned,createdAt,updatedAt,folderIds,locked,tags,color,checklist,deletedAt,reminderAt,reminderFired}));
   const plainFolders = allFolders.map(({id,name,createdAt})=>({id,name,createdAt}));
   return { notes: plainNotes, folders: plainFolders, exportedAt: Date.now() };
 }
@@ -141,6 +143,17 @@ function stripHtml(html){
 }
 function hasInlineImage(html){
   return !!html && /<img[\s>]/i.test(html);
+}
+
+function toDatetimeLocalValue(ts){
+  const d = new Date(ts);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function formatReminder(ts){
+  const d = new Date(ts); const now = new Date();
+  const sameYear = d.getFullYear()===now.getFullYear();
+  return d.toLocaleString('pl-PL', { day:'2-digit', month:'2-digit', year: sameYear?undefined:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
 function activeNotes(list){
@@ -234,6 +247,11 @@ const checklistWrap = document.getElementById('checklistWrap');
 const checklistItems = document.getElementById('checklistItems');
 const checklistNewInput = document.getElementById('checklistNewInput');
 const checklistAddBtn = document.getElementById('checklistAddBtn');
+const reminderToggleBtn = document.getElementById('reminderToggleBtn');
+const reminderRow = document.getElementById('reminderRow');
+const reminderInput = document.getElementById('reminderInput');
+const reminderSetBtn = document.getElementById('reminderSetBtn');
+const reminderClearBtn = document.getElementById('reminderClearBtn');
 
 // Udostępnianie / PIN / kopia zapasowa
 const shareBtn = document.getElementById('shareBtn');
@@ -337,6 +355,12 @@ function buildNoteItemEl(n, onOpen){
   if(n.checklist && n.checklist.length){
     const done = n.checklist.filter(i=>i.checked).length;
     const cl = document.createElement('span'); cl.textContent = ` ☑️ ${done}/${n.checklist.length}`; meta.appendChild(cl);
+  }
+  if(n.reminderAt){
+    const rem = document.createElement('span');
+    rem.className = 'note-reminder-badge' + (n.reminderAt <= Date.now() ? ' overdue' : '');
+    rem.textContent = ` 🔔 ${formatReminder(n.reminderAt)}`;
+    meta.appendChild(rem);
   }
   if(n.locked){ const lk = document.createElement('span'); lk.className='note-lock-badge'; lk.textContent = ' 🔒'; meta.appendChild(lk); }
   main.appendChild(t); main.appendChild(b); main.appendChild(meta);
@@ -864,6 +888,95 @@ function addChecklistItem(){
   checklistNewInput.focus();
 }
 
+// --- Edytor: przypomnienie ---
+function updateReminderBtnLabel(){
+  if(currentNote && currentNote.reminderAt){
+    reminderToggleBtn.textContent = '🔔 ' + formatReminder(currentNote.reminderAt);
+    reminderToggleBtn.classList.add('active');
+  } else {
+    reminderToggleBtn.textContent = '🔔';
+    reminderToggleBtn.classList.remove('active');
+  }
+}
+function openReminderRow(){
+  reminderRow.classList.remove('hidden');
+  if(currentNote && currentNote.reminderAt){
+    reminderInput.value = toDatetimeLocalValue(currentNote.reminderAt);
+    reminderClearBtn.classList.remove('hidden');
+  } else {
+    reminderInput.value = '';
+    reminderClearBtn.classList.add('hidden');
+  }
+}
+function closeReminderRow(){
+  reminderRow.classList.add('hidden');
+}
+function toggleReminderRow(){
+  if(!currentNote) return;
+  if(reminderRow.classList.contains('hidden')) openReminderRow(); else closeReminderRow();
+}
+async function requestNotificationPermission(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'default'){
+    try{ await Notification.requestPermission(); }catch(e){}
+  }
+}
+async function commitReminder(){
+  if(!currentNote) return;
+  const val = reminderInput.value;
+  if(!val){ showToast('Wybierz datę i godzinę'); return; }
+  const ts = new Date(val).getTime();
+  if(isNaN(ts)){ showToast('Nieprawidłowa data'); return; }
+  currentNote.reminderAt = ts;
+  currentNote.reminderFired = false;
+  await requestNotificationPermission();
+  await saveNote(currentNote);
+  updateReminderBtnLabel();
+  closeReminderRow();
+  await refreshViews();
+  showToast('Przypomnienie ustawione: ' + formatReminder(ts));
+}
+async function clearReminder(){
+  if(!currentNote) return;
+  currentNote.reminderAt = null;
+  currentNote.reminderFired = false;
+  await saveNote(currentNote);
+  updateReminderBtnLabel();
+  closeReminderRow();
+  await refreshViews();
+  showToast('Usunięto przypomnienie');
+}
+function fireReminderNotification(n){
+  const title = n.title || 'Przypomnienie';
+  const body = stripHtml(n.body).slice(0,120) || 'Masz przypomnienie w GG Notes';
+  if('Notification' in window && Notification.permission === 'granted'){
+    try{ new Notification(title, { body, icon: '/icon.svg' }); }catch(e){}
+  }
+  showToast('🔔 Przypomnienie: ' + title);
+}
+async function checkReminders(){
+  const all = await getAllNotes();
+  const now = Date.now();
+  let firedAny = false;
+  for(const n of all){
+    if(n.deletedAt) continue;
+    if(n.reminderAt && !n.reminderFired && n.reminderAt <= now){
+      n.reminderFired = true;
+      await saveNote(n);
+      firedAny = true;
+      fireReminderNotification(n);
+    }
+  }
+  if(firedAny){
+    notes = await getAllNotes();
+    renderList(searchEl.value);
+    if(currentNote){
+      const updated = notes.find(x=>x.id===currentNote.id);
+      if(updated){ currentNote = updated; updateReminderBtnLabel(); }
+    }
+  }
+}
+
 function bindAutosave(){
   titleEl.addEventListener('input', ()=>{
     if(!currentNote) return;
@@ -953,12 +1066,13 @@ async function openNote(id){
   checklistVisible = !!(n.checklist && n.checklist.length>0);
   setChecklistVisible(checklistVisible);
   if(checklistVisible) renderChecklist();
+  updateReminderBtnLabel(); closeReminderRow();
   renderList(searchEl.value);
   showEditorScreen();
 }
 
 async function newNote(folderId){
-  const n = { title:'', body:'', pinned:false, audio:null, audioMime:null, photos:[], locked:false, tags:[], color:null, checklist:[], folderIds: folderId ? [folderId] : [], id: 'n_'+Date.now() };
+  const n = { title:'', body:'', pinned:false, audio:null, audioMime:null, photos:[], locked:false, tags:[], color:null, checklist:[], reminderAt:null, reminderFired:false, folderIds: folderId ? [folderId] : [], id: 'n_'+Date.now() };
   await saveNote(n);
   await refreshViews();
   currentNote = n; titleEl.value=''; bodyEl.innerHTML='';
@@ -967,6 +1081,7 @@ async function newNote(folderId){
   renderColorSwatches();
   renderNoteTagsEditor(); closeTagInput();
   setChecklistVisible(false);
+  updateReminderBtnLabel(); closeReminderRow();
   showEditorScreen();
   setTimeout(()=>titleEl.focus(), 300);
 }
@@ -1605,7 +1720,7 @@ async function init(){
   folders = await getAllFolders();
   await purgeOldTrash();
   if(activeNotes().length===0){
-    await saveNote({id:'n_welcome', title:'Witaj w GG Notes', body:'To jest Twoja pierwsza notatka. Edytuj ją, dodaj nagranie głosowe 🎤, zdjęcie 📷 lub przypnij ⭐ ważne notatki.', pinned:true, audio:null, audioMime:null, photos:[], locked:false, tags:[], color:null, checklist:[]});
+    await saveNote({id:'n_welcome', title:'Witaj w GG Notes', body:'To jest Twoja pierwsza notatka. Edytuj ją, dodaj nagranie głosowe 🎤, zdjęcie 📷 lub przypnij ⭐ ważne notatki.', pinned:true, audio:null, audioMime:null, photos:[], locked:false, tags:[], color:null, checklist:[], reminderAt:null, reminderFired:false});
     notes = await getAllNotes();
   }
   updateSortBtnLabel();
@@ -1613,6 +1728,8 @@ async function init(){
   renderList();
   updateBackupInfoText();
   bindAutosave();
+  await checkReminders();
+  setInterval(checkReminders, 30000);
 }
 
 searchEl.addEventListener('input', ()=>renderList(searchEl.value));
@@ -1719,5 +1836,10 @@ noteColorRow.addEventListener('click', (e)=>{
   const btn = e.target.closest('.note-color-swatch'); if(!btn) return;
   setNoteColor(btn.dataset.color || null);
 });
+
+// Edytor: przypomnienie
+reminderToggleBtn.addEventListener('click', toggleReminderRow);
+reminderSetBtn.addEventListener('click', commitReminder);
+reminderClearBtn.addEventListener('click', clearReminder);
 
 window.addEventListener('load', ()=>init());

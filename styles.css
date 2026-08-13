@@ -72,6 +72,8 @@ body{
 .note-title{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .note-body{ color:var(--muted); font-size:.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
 .note-meta{ display:flex; align-items:center; gap:6px; margin-top:4px; font-size:.75rem; color:var(--muted); }
+.note-reminder-badge{ color:var(--accent); font-weight:600; }
+.note-reminder-badge.overdue{ color:#ff453a; }
 .pin-star{ font-size:1.2rem; flex-shrink:0; background:none; border:none; color:#e6a700; cursor:pointer; padding:4px; line-height:1; }
 
 .fab{
@@ -373,6 +375,7 @@ button.danger{ background:transparent; color:var(--danger); }
 .note-color-swatch.none{
   background:linear-gradient(135deg, transparent 45%, var(--muted) 45%, var(--muted) 55%, transparent 55%);
 }
+.reminder-toggle-btn.active{ color:var(--accent); }
 
 /* --- Edytor: etykiety (tagi) --- */
 .tags-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border); }
@@ -384,6 +387,11 @@ button.danger{ background:transparent; color:var(--danger); }
 .tag-chip-editable button{ background:none; border:none; color:var(--accent); padding:0; font-size:.85rem; cursor:pointer; line-height:1; }
 .tag-add-btn{ padding:6px 12px; font-size:.78rem; background:var(--bg); color:var(--text); border:1px dashed var(--border); border-radius:999px; }
 .tag-input{ padding:6px 12px; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text); font-size:.82rem; width:130px; }
+
+/* --- Edytor: przypomnienie --- */
+.reminder-row{ display:flex; align-items:center; gap:8px; padding:10px 16px; flex-shrink:0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.reminder-input{ padding:6px 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:.82rem; }
+.reminder-clear-btn{ padding:6px 12px; font-size:.78rem; background:transparent; color:#ff453a; border:1px solid #ff453a; border-radius:999px; }
 
 /* --- Edytor: lista zadań (checklista) --- */
 .checklist-wrap{ padding:8px 16px 0; flex-shrink:0; max-height:38vh; overflow-y:auto; -webkit-overflow-scrolling:touch; border-bottom:1px solid var(--border); }

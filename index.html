@@ -123,12 +123,19 @@
           <button class="note-color-swatch" type="button" data-color="#bf5af2" style="background:#bf5af2" aria-label="Fioletowy"></button>
         </div>
         <button id="checklistToggleBtn" class="icon-btn" title="Lista zadań" aria-label="Przełącz listę zadań">☑️</button>
+        <button id="reminderToggleBtn" class="icon-btn reminder-toggle-btn" title="Przypomnienie" aria-label="Ustaw przypomnienie">🔔</button>
       </div>
 
       <div class="tags-row" id="noteTagsRow">
         <div id="noteTagChips" class="tag-chips"></div>
         <button id="addTagBtn" class="tag-add-btn" type="button">+ Tag</button>
         <input id="tagInput" class="tag-input hidden" placeholder="Nowy tag" />
+      </div>
+
+      <div id="reminderRow" class="reminder-row hidden">
+        <input id="reminderInput" type="datetime-local" class="reminder-input" />
+        <button id="reminderSetBtn" class="tag-add-btn" type="button">Ustaw</button>
+        <button id="reminderClearBtn" class="reminder-clear-btn hidden" type="button">✕ Usuń</button>
       </div>
 
       <div id="checklistWrap" class="checklist-wrap hidden">
