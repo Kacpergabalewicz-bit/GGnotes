@@ -1,26 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#3aa0ff" />
-      <stop offset="55%" stop-color="#0b5cff" />
-      <stop offset="100%" stop-color="#083fc7" />
+      <stop offset="0%" stop-color="#8a5cff" />
+      <stop offset="55%" stop-color="#5b3df0" />
+      <stop offset="100%" stop-color="#3a1fc9" />
+    </linearGradient>
+    <linearGradient id="pen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd60a" />
+      <stop offset="100%" stop-color="#ff9f0a" />
     </linearGradient>
   </defs>
 
   <rect width="120" height="120" rx="26" fill="url(#bg)" />
 
-  <!-- Kartka notatnika -->
-  <path d="M24 28 a10 10 0 0 1 10 -10 h44 a10 10 0 0 1 10 10 v52 l-18 22 h-46 a10 10 0 0 1 -10 -10 z" fill="#ffffff" />
-  <path d="M88 80 l-18 22 v-14 a8 8 0 0 1 8 -8 z" fill="#d7e4fb" />
+  <!-- Kartka notatnika (lekko obrócona) -->
+  <g transform="rotate(-6 60 62)">
+    <rect x="26" y="20" width="68" height="84" rx="8" fill="#ffffff" />
+    <line x1="38" y1="38" x2="82" y2="38" stroke="#d8d0ff" stroke-width="6" stroke-linecap="round" />
+    <line x1="38" y1="52" x2="82" y2="52" stroke="#e7e2ff" stroke-width="6" stroke-linecap="round" />
+    <line x1="38" y1="66" x2="70" y2="66" stroke="#e7e2ff" stroke-width="6" stroke-linecap="round" />
+  </g>
 
-  <!-- Linie tekstu -->
-  <line x1="36" y1="34" x2="70" y2="34" stroke="#9fb8ee" stroke-width="7" stroke-linecap="round" />
-  <line x1="36" y1="50" x2="82" y2="50" stroke="#cddcf7" stroke-width="6" stroke-linecap="round" />
-  <line x1="36" y1="64" x2="82" y2="64" stroke="#cddcf7" stroke-width="6" stroke-linecap="round" />
-  <line x1="36" y1="78" x2="66" y2="78" stroke="#cddcf7" stroke-width="6" stroke-linecap="round" />
-
-  <!-- Odznaka: ukończone zadanie -->
-  <circle cx="90" cy="90" r="21" fill="url(#bg)" />
-  <circle cx="90" cy="90" r="16" fill="#34c759" />
-  <path d="M82 90.5 L88 96.5 L100 81.5" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Długopis piszący po kartce -->
+  <g transform="rotate(45 78 46)">
+    <rect x="72" y="10" width="14" height="62" rx="7" fill="url(#pen)" />
+    <rect x="72" y="10" width="14" height="16" rx="7" fill="#3a1fc9" />
+    <path d="M72 72 L79 90 L86 72 Z" fill="#3a1fc9" />
+  </g>
 </svg>
